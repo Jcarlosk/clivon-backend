@@ -1,0 +1,177 @@
+# Sistema de Correção de Provas Inteligente
+
+> Plataforma web para correção automática de provas com suporte a múltiplas escolas, visão computacional e painel para professores e alunos.
+
+## Sobre o Projeto
+
+Este sistema automatiza a correção de provas, permitindo que professores economizem tempo e acompanhem o desempenho dos alunos.
+
+A aplicação utiliza OCR (reconhecimento de texto) para leitura de respostas a partir de imagens, além de oferecer autenticação, relatórios e organização por escolas.
+
+## Funcionalidades
+
+- Correção automática de provas via imagem (OCR)
+- Leitura direta da câmera
+- Suporte a múltiplas escolas (multi-tenant)
+- Painel do professor
+- Painel do aluno
+- Exportação de resultados em Excel
+- Geração de relatórios em PDF
+- Autenticação segura (JWT + hash de senha)
+
+## Tecnologias Utilizadas
+
+**Backend**
+- FastAPI
+- Uvicorn
+
+**Visão Computacional**
+- OpenCV
+- Tesseract OCR
+
+**Banco de Dados e Segurança**
+- Supabase (PostgreSQL)
+- Psycopg2
+- Python-JOSE (JWT)
+- Passlib + Bcrypt
+
+**Arquivos**
+- OpenPyXL (Excel)
+- ReportLab (PDF)
+
+**Outros**
+- NumPy
+- Python-dotenv
+- Python-multipart
+
+## Dependências
+
+```txt
+fastapi==0.111.0
+uvicorn==0.29.0
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+python-multipart==0.0.9
+python-jose==3.3.0
+passlib==1.7.4
+bcrypt==4.1.2
+openpyxl==3.1.2
+reportlab==4.1.0
+pytesseract==0.3.10
+supabase==2.4.3
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+```
+
+## Estrutura do Projeto
+
+```bash
+📦 projeto
+ ┣ 📂 backend
+ ┃ ┣ 📜 main.py
+ ┃ ┣ 📂 routes
+ ┃ ┣ 📂 services
+ ┃ ┣ 📂 models
+ ┃ ┗ 📂 core
+ ┣ 📂 frontend
+ ┃ ┣ 📜 index.html
+ ┃ ┣ 📂 assets
+ ┃ ┗ 📂 scripts
+ ┣ 📂 uploads
+ ┗ 📜 README.md
+```
+
+## Como rodar o projeto
+
+### 1. Clonar
+
+```bash
+git clone https://github.com/seu-usuario/seu-projeto.git
+cd seu-projeto
+```
+
+### 2. Ambiente virtual
+
+```bash
+python -m venv venv
+```
+
+**Windows**
+```bash
+venv\Scripts\activate
+```
+
+**Linux/Mac**
+```bash
+source venv/bin/activate
+```
+
+### 3. Instalar dependências
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Variáveis de ambiente
+
+Crie um `.env`:
+
+```env
+SUPABASE_URL=...
+SUPABASE_KEY=...
+SECRET_KEY=...
+DATABASE_URL=...
+```
+
+### 5. Instalar Tesseract
+
+**Linux**
+```bash
+sudo apt install tesseract-ocr
+```
+
+**Windows**
+Instale e adicione ao PATH.
+
+### 6. Rodar o servidor
+
+```bash
+uvicorn main:app --reload
+```
+
+Acesse:
+```
+http://127.0.0.1:8000
+```
+
+## Como funciona
+
+1. Professor envia a imagem da prova  
+2. OpenCV processa a imagem  
+3. OCR extrai as respostas  
+4. Sistema compara com o gabarito  
+5. Resultado é salvo e exibido  
+
+## Roadmap
+
+- [ ] Reconhecimento de marcação (bolhas estilo ENEM)
+- [ ] Dashboard com gráficos
+- [ ] Sistema SaaS (planos)
+- [ ] App mobile
+- [ ] Correção com IA avançada
+- [ ] Upload em lote
+
+## Contribuição
+
+1. Fork  
+2. Crie uma branch (`feature/nova-feature`)  
+3. Commit  
+4. Pull Request  
+
+## Licença
+
+MIT
+
+## Autor
+
+Desenvolvido por Weko Studio
