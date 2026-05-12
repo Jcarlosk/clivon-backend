@@ -290,4 +290,4 @@ def register_teacher(
 
 @router.get("/me")
 def get_me(teacher: dict = Depends(get_current_teacher)):
-    return teachergit add backend/core/auth.py
+    return teacher
