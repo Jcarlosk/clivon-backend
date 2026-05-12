@@ -214,80 +214,64 @@ def teacher_login(payload: TeacherLoginPayload):
 
 @router.post("/aluno/login")
 def student_login(payload: StudentLoginPayload):
-    """
-    Login do aluno via função SQL student_login_by_code().
-
-    Fluxo:
-      1. Chama student_login_by_code(join_code, enrollment, pin) no Postgres
-      2. A função SQL valida o pin_hash com crypt() e verifica vínculo com a turma
-      3. Gera JWT próprio com os dados do aluno
-
-    Campos recebidos do frontend:
-      join_code  → código da turma (ex: MAT7B25)
-      enrollment → matrícula (ex: 2025001042)
-      pin        → data de nascimento DDMMYYYY (ex: 15042010)
-    """
     conn = get_conn()
     cur  = get_cursor(conn)
     try:
-        # Delega toda a validação para a função SQL segura
+        pin_original = payload.pin.strip()
+        
+        # Se o frontend mandar com barras ou traços, limpamos tudo para ficar só números
+        # Ex: "2010-05-15" vira "15052010" para bater com o que está no banco
+        pin_limpo = pin_original.replace("-", "").replace("/", "")
+        
+        # Se a data veio invertida (YYYYMMDD), colocamos no formato DDMMAAAA
+        if len(pin_limpo) == 8 and pin_limpo.startswith("20"):
+            pin_final = f"{pin_limpo[6:8]}{pin_limpo[4:6]}{pin_limpo[0:4]}"
+        else:
+            pin_final = pin_limpo
+
+        print(f"[DEBUG LOGIN] Recebido: {pin_original} | Enviando ao Banco: {pin_final}")
+
         cur.execute(
             "SELECT student_login_by_code(%s, %s, %s) AS result",
             (
                 payload.join_code.strip().upper(),
                 payload.enrollment.strip(),
-                payload.pin.strip(),
+                pin_final,
             ),
         )
         row = cur.fetchone()
+    except Exception as e:
+        print(f"[ERRO CRÍTICO LOGIN] {e}")
+        raise HTTPException(status_code=500, detail=f"Erro no banco: {e}")
     finally:
         cur.close()
         conn.close()
 
-    if not row:
-        raise HTTPException(status_code=500, detail="Erro interno ao autenticar aluno.")
+    if not row or not row["result"]:
+        raise HTTPException(status_code=500, detail="Erro ao processar login.")
 
-    result = row["result"]  # JSONB → dict pelo driver psycopg2
-
-    # A função SQL retorna { ok: false, error: "..." } em caso de falha
+    result = row["result"]
     if not result.get("ok"):
-        error_msg = result.get("error", "Dados incorretos.")
+        raise HTTPException(status_code=401, detail=result.get("error", "Dados inválidos."))
 
-        # Mapeia erros internos para mensagens amigáveis
-        friendly = {
-            "Matrícula não encontrada":        "Matrícula não encontrada.",
-            "PIN incorreto":                   "Data de nascimento incorreta.",
-            "Aluno não está nesta turma":      "Código de turma não corresponde à sua matrícula.",
-            "Código de turma inválido ou expirado": "Código de turma inválido ou expirado.",
-        }
-        raise HTTPException(
-            status_code=401,
-            detail=friendly.get(error_msg, "Matrícula ou dados incorretos.")
-        )
-
-    # Gera JWT do aluno
+    # Gera o token
     token = _create_token(
         {
-            "sub":        str(result["student_id"]),
-            "name":       result["name"],
+            "sub": str(result["student_id"]),
+            "name": result["name"],
             "enrollment": result["enrollment"],
-            "school_id":  "",           # student_login_by_code não retorna school_id
-            "class_id":   str(result["class_id"]),
-            "type":       "student",
+            "class_id": str(result["class_id"]),
+            "type": "student",
         },
         expires_hours=12,
     )
 
     return {
         "access_token": token,
-        "token_type":   "bearer",
-        "name":         result["name"],
-        "student_id":   str(result["student_id"]),
-        "enrollment":   result["enrollment"],
-        "class_id":     str(result["class_id"]),
-        "class_name":   result.get("class_name", ""),
+        "token_type": "bearer",
+        "name": result["name"],
+        "class_name": result.get("class_name", "")
     }
-
 
 @router.post("/register")
 def register_teacher(
