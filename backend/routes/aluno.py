@@ -27,16 +27,16 @@ def get_student_dashboard(student=Depends(get_current_student)):
     cur  = get_cursor(conn)
 
     try:
-        # Notas — view existente no banco
+      # Notas — ajustado para o nome real da view no Supabase
         cur.execute(
-            "SELECT * FROM student_grades_summary WHERE student_id = %s",
+            "SELECT * FROM v_student_grades_summary WHERE student_id = %s",
             (student["id"],),
         )
         grades = [dict(r) for r in cur.fetchall()]
 
-        # Faltas — view existente no banco
+        # Faltas — ajustado para attendance
         cur.execute(
-            "SELECT * FROM student_absence_summary WHERE student_id = %s",
+            "SELECT * FROM v_student_attendance_summary WHERE student_id = %s",
             (student["id"],),
         )
         absences = [dict(r) for r in cur.fetchall()]
