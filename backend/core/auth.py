@@ -1,18 +1,9 @@
 """
 auth.py — Clivon Edu Authentication
 ====================================
-Compatível com o schema Supabase real:
-
-  PROFESSOR → autenticação via Supabase Auth (auth.users)
-              A senha fica em auth.users.encrypted_password (crypt/bf)
-              O token JWT é gerado pelo Supabase e validado aqui via SECRET_KEY
-
-  ALUNO     → autenticação própria via função SQL student_login_by_code()
-              Usa pin_hash (crypt/bf) na tabela students
-              Recebe: join_code + enrollment + pin (DDMMYYYY)
-              Token JWT gerado pela API (não pelo Supabase)
-
-IDs → UUID em todo o banco (não INT)
+PROFESSOR → Supabase Auth (auth.users) + JWT próprio
+ALUNO     → student_login_by_code() SQL + JWT próprio
+            Recebe pin no formato DDMMYYYY e converte para DATE (YYYY-MM-DD)
 """
 
 import os
@@ -31,13 +22,11 @@ load_dotenv()
 
 # ── Configuração ──────────────────────────────────────────────────────────────
 
-SECRET_KEY      = os.getenv("SECRET_KEY", "fallback_inseguro")
-ALGORITHM       = "HS256"
-
-# URL + chave de serviço do Supabase (necessários para autenticar professor)
-SUPABASE_URL    = os.getenv("SUPABASE_URL", "")          # ex: https://xyzxyz.supabase.co
-SUPABASE_ANON   = os.getenv("SUPABASE_ANON_KEY", "")     # chave anon pública
-SUPABASE_SERVICE= os.getenv("SUPABASE_SERVICE_KEY", "")  # service_role (apenas no backend)
+SECRET_KEY       = os.getenv("SECRET_KEY", "fallback_inseguro")
+ALGORITHM        = "HS256"
+SUPABASE_URL     = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON    = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 router   = APIRouter(tags=["Auth"])
 security = HTTPBearer()
@@ -50,15 +39,15 @@ class TeacherLoginPayload(BaseModel):
     password: str
 
 class StudentLoginPayload(BaseModel):
-    join_code:  str   # código da turma, ex: "MAT7B25"
-    enrollment: str   # matrícula do aluno, ex: "2025001042"
-    pin:        str   # data de nascimento DDMMYYYY, ex: "15042010"
+    join_code:  str   # ex: "ANO2A25"
+    enrollment: str   # ex: "20260010007"
+    pin:        str   # data de nascimento DDMMYYYY, ex: "20082005"
 
 class RegisterPayload(BaseModel):
     name:      str
     email:     EmailStr
     password:  str
-    school_id: str        # UUID
+    school_id: str
     role:      Optional[str] = "teacher"
 
 
@@ -76,6 +65,18 @@ def _decode_token(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido.")
 
+def _pin_to_date(pin: str) -> str:
+    """
+    Converte PIN DDMMYYYY → YYYY-MM-DD para passar ao banco como DATE.
+    Ex: "20082005" → "2005-08-20"
+    Lança ValueError se o formato for inválido.
+    """
+    pin = pin.strip()
+    if len(pin) != 8 or not pin.isdigit():
+        raise ValueError(f"PIN inválido: '{pin}'. Esperado DDMMYYYY com 8 dígitos.")
+    dd, mm, yyyy = pin[0:2], pin[2:4], pin[4:8]
+    return f"{yyyy}-{mm}-{dd}"
+
 
 # ── Guards (Dependencies) ─────────────────────────────────────────────────────
 
@@ -86,9 +87,9 @@ def get_current_teacher(
     if payload.get("type") != "teacher":
         raise HTTPException(status_code=403, detail="Acesso restrito a professores.")
     return {
-        "id":        payload["sub"],          # UUID string
+        "id":        payload["sub"],
         "name":      payload["name"],
-        "school_id": payload["school_id"],    # UUID string
+        "school_id": payload["school_id"],
         "role":      payload.get("role", "teacher"),
     }
 
@@ -99,20 +100,17 @@ def get_current_student(
     if payload.get("type") != "student":
         raise HTTPException(status_code=403, detail="Acesso restrito a alunos.")
     return {
-        "id":         payload["sub"],         # UUID string
+        "id":         payload["sub"],
         "name":       payload["name"],
         "enrollment": payload["enrollment"],
-        "school_id":  payload["school_id"],   # UUID string
+        "school_id":  payload["school_id"],
         "class_id":   payload.get("class_id"),
         "role":       "student",
     }
 
 def require_coordinator(teacher: dict = Depends(get_current_teacher)) -> dict:
     if teacher["role"] not in ("coordinator", "admin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Apenas coordenadores podem aceder a este recurso."
-        )
+        raise HTTPException(status_code=403, detail="Apenas coordenadores podem aceder a este recurso.")
     return teacher
 
 
@@ -120,48 +118,27 @@ def require_coordinator(teacher: dict = Depends(get_current_teacher)) -> dict:
 
 @router.post("/login")
 def teacher_login(payload: TeacherLoginPayload):
-    """
-    Login do professor via Supabase Auth.
-
-    Fluxo:
-      1. Chama a API de auth do Supabase (signInWithPassword)
-      2. Supabase valida email + senha contra auth.users
-      3. Busca dados complementares na tabela teachers (school_id, role, etc.)
-      4. Gera nosso próprio JWT com os dados necessários para os guards
-    """
+    """Login do professor via Supabase Auth."""
     if not SUPABASE_URL or not SUPABASE_ANON:
-        raise HTTPException(
-            status_code=500,
-            detail="Configuração do Supabase ausente no servidor."
-        )
+        raise HTTPException(status_code=500, detail="Configuração do Supabase ausente no servidor.")
 
-    # 1. Autentica no Supabase
-    supabase_auth_url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
     try:
         resp = httpx.post(
-            supabase_auth_url,
+            f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
             json={"email": payload.email, "password": payload.password},
-            headers={
-                "apikey":        SUPABASE_ANON,
-                "Content-Type":  "application/json",
-            },
+            headers={"apikey": SUPABASE_ANON, "Content-Type": "application/json"},
             timeout=10,
         )
     except httpx.RequestError:
         raise HTTPException(status_code=503, detail="Não foi possível conectar ao servidor de autenticação.")
 
     if resp.status_code != 200:
-        # Supabase retorna 400 para credenciais inválidas
         raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
 
-    auth_data  = resp.json()
-    auth_user  = auth_data.get("user", {})
-    auth_uid   = auth_user.get("id")
-
+    auth_uid = resp.json().get("user", {}).get("id")
     if not auth_uid:
         raise HTTPException(status_code=401, detail="Resposta inesperada do servidor de autenticação.")
 
-    # 2. Busca dados do professor na tabela teachers
     conn = get_conn()
     cur  = get_cursor(conn)
     try:
@@ -181,15 +158,10 @@ def teacher_login(payload: TeacherLoginPayload):
         conn.close()
 
     if not row:
-        raise HTTPException(
-            status_code=403,
-            detail="Utilizador autenticado mas sem perfil de professor. Contacte o suporte."
-        )
-
+        raise HTTPException(status_code=403, detail="Utilizador autenticado mas sem perfil de professor. Contacte o suporte.")
     if not row["is_active"]:
         raise HTTPException(status_code=403, detail="Conta desativada. Entre em contacto com a escola.")
 
-    # 3. Gera nosso JWT para uso nos guards das outras rotas
     token = _create_token(
         {
             "sub":       str(row["id"]),
@@ -214,92 +186,88 @@ def teacher_login(payload: TeacherLoginPayload):
 
 @router.post("/aluno/login")
 def student_login(payload: StudentLoginPayload):
+    """
+    Login do aluno via student_login_by_code().
+    Frontend envia pin no formato DDMMYYYY (ex: "20082005").
+    Convertido internamente para DATE YYYY-MM-DD antes de ir ao banco.
+    """
+    # Converte DDMMYYYY → YYYY-MM-DD
+    try:
+        data_nascimento = _pin_to_date(payload.pin)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     conn = get_conn()
     cur  = get_cursor(conn)
     try:
-        pin_original = payload.pin.strip()
-        
-        # Se o frontend mandar com barras ou traços, limpamos tudo para ficar só números
-        # Ex: "2010-05-15" vira "15052010" para bater com o que está no banco
-        pin_limpo = pin_original.replace("-", "").replace("/", "")
-        
-        # Se a data veio invertida (YYYYMMDD), colocamos no formato DDMMAAAA
-        if len(pin_limpo) == 8 and pin_limpo.startswith("20"):
-            pin_final = f"{pin_limpo[6:8]}{pin_limpo[4:6]}{pin_limpo[0:4]}"
-        else:
-            pin_final = pin_limpo
-
-        print(f"[DEBUG LOGIN] Recebido: {pin_original} | Enviando ao Banco: {pin_final}")
-
         cur.execute(
-            "SELECT student_login_by_code(%s, %s, %s) AS result",
+            "SELECT student_login_by_code(%s, %s, %s::date) AS result",
             (
                 payload.join_code.strip().upper(),
                 payload.enrollment.strip(),
-                pin_final,
+                data_nascimento,
             ),
         )
         row = cur.fetchone()
     except Exception as e:
-        print(f"[ERRO CRÍTICO LOGIN] {e}")
-        raise HTTPException(status_code=500, detail=f"Erro no banco: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro interno no banco de dados: {e}")
     finally:
         cur.close()
         conn.close()
 
-    if not row or not row["result"]:
-        raise HTTPException(status_code=500, detail="Erro ao processar login.")
+    if not row:
+        raise HTTPException(status_code=500, detail="Erro interno ao autenticar aluno.")
 
     result = row["result"]
-    if not result.get("ok"):
-        raise HTTPException(status_code=401, detail=result.get("error", "Dados inválidos."))
 
-    # Gera o token
+    if not result.get("ok"):
+        friendly = {
+            "Matrícula não encontrada":             "Matrícula não encontrada.",
+            "PIN incorreto":                        "Data de nascimento incorreta.",
+            "Aluno não está nesta turma":           "Código de turma não corresponde à sua matrícula.",
+            "Código de turma inválido ou expirado": "Código de turma inválido ou expirado.",
+        }
+        error_msg = result.get("error", "Dados incorretos.")
+        raise HTTPException(status_code=401, detail=friendly.get(error_msg, error_msg))
+
     token = _create_token(
         {
-            "sub": str(result["student_id"]),
-            "name": result["name"],
+            "sub":        str(result["student_id"]),
+            "name":       result["name"],
             "enrollment": result["enrollment"],
-            "class_id": str(result["class_id"]),
-            "type": "student",
+            "school_id":  "",
+            "class_id":   str(result["class_id"]),
+            "type":       "student",
         },
         expires_hours=12,
     )
 
     return {
         "access_token": token,
-        "token_type": "bearer",
-        "name": result["name"],
-        "class_name": result.get("class_name", "")
+        "token_type":   "bearer",
+        "name":         result["name"],
+        "student_id":   str(result["student_id"]),
+        "enrollment":   result["enrollment"],
+        "class_id":     str(result["class_id"]),
+        "class_name":   result.get("class_name", ""),
     }
+
 
 @router.post("/register")
 def register_teacher(
     payload:  RegisterPayload,
     _teacher: dict = Depends(require_coordinator),
 ):
-    """
-    Cria professor via função SQL create_teacher() do Supabase.
-    Apenas coordenadores e admins podem usar este endpoint.
-    """
+    """Cria professor via create_teacher(). Apenas coordenadores e admins."""
     if _teacher["school_id"] != payload.school_id and _teacher["role"] != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Só podes registar professores na tua escola."
-        )
+        raise HTTPException(status_code=403, detail="Só podes registar professores na tua escola.")
 
     conn = get_conn()
     cur  = get_cursor(conn)
     try:
         cur.execute(
             "SELECT create_teacher(%s, %s, %s, %s, %s::user_role) AS result",
-            (
-                payload.school_id,
-                payload.name,
-                payload.email,
-                payload.password,
-                payload.role,
-            ),
+            (payload.school_id, payload.name, payload.email, payload.password, payload.role),
         )
         row = cur.fetchone()
         conn.commit()
@@ -312,10 +280,7 @@ def register_teacher(
 
     result = row["result"]
     if not result.get("ok"):
-        raise HTTPException(
-            status_code=400,
-            detail=result.get("error", "Erro ao registar professor.")
-        )
+        raise HTTPException(status_code=400, detail=result.get("error", "Erro ao registar professor."))
 
     return {
         "teacher_id": str(result["teacher_id"]),
@@ -325,4 +290,4 @@ def register_teacher(
 
 @router.get("/me")
 def get_me(teacher: dict = Depends(get_current_teacher)):
-    return teacher
+    return teachergit add backend/core/auth.py
