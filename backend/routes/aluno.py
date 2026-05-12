@@ -41,7 +41,7 @@ def get_student_dashboard(student=Depends(get_current_student)):
         )
         absences = [dict(r) for r in cur.fetchall()]
 
-        # Horário — usa class_id do token JWT
+       # Horário — usa class_id do token JWT
         cur.execute(
             """
             SELECT
@@ -49,10 +49,11 @@ def get_student_dashboard(student=Depends(get_current_student)):
                 s.weekday,
                 s.start_time,
                 s.end_time,
-                s.subject,
+                sub.name AS subject,
                 t.name AS teacher_name
             FROM   schedules s
             LEFT JOIN teachers t ON t.id = s.teacher_id
+            LEFT JOIN subjects sub ON sub.id = s.subject_id
             WHERE  s.class_id = %s
             ORDER  BY s.weekday, s.start_time
             """,
