@@ -1,0 +1,285 @@
+<div align="center">
+
+<img src="https://img.shields.io/badge/Clivon_Edu-API-4F46E5?style=for-the-badge&logoColor=white" alt="Clivon Edu" height="60"/>
+
+# 🎓 Clivon Edu — Backend API
+
+**Plataforma inteligente de correção de provas com visão computacional, painel para professores e alunos, e suporte a múltiplas escolas.**
+
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com)
+[![OpenCV](https://img.shields.io/badge/OpenCV-4.9-5C3EE8?style=flat-square&logo=opencv&logoColor=white)](https://opencv.org)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Em_Desenvolvimento-orange?style=flat-square)]()
+
+---
+
+[📖 Documentação](#-como-funciona) • [🚀 Deploy](#-como-rodar-o-projeto) • [🗺️ Roadmap](#-roadmap) • [👤 Autor](#-autor)
+
+</div>
+
+---
+
+## 📌 Sobre o Projeto
+
+O **Clivon Edu** é uma API construída em **FastAPI** que automatiza a correção de provas utilizando visão computacional e OCR. Professores economizam tempo, alunos acompanham seu desempenho em tempo real.
+
+> Desenvolvido para escolas que precisam de agilidade, precisão e organização — tudo em uma só plataforma.
+
+---
+
+## ✨ Funcionalidades
+
+| Funcionalidade | Status |
+|---|---|
+| ✅ Correção automática via imagem (OCR) | Disponível |
+| ✅ Leitura direta da câmera | Disponível |
+| ✅ Suporte multi-escola (multi-tenant) | Disponível |
+| ✅ Painel do professor | Disponível |
+| ✅ Painel do aluno | Disponível |
+| ✅ Autenticação JWT (professor + aluno) | Disponível |
+| ✅ Login do aluno por código de turma | Disponível |
+| ✅ Exportação de resultados em Excel | Disponível |
+| ✅ Geração de relatórios em PDF | Disponível |
+| 🔄 Reconhecimento de bolhas estilo ENEM | Em desenvolvimento |
+| 🔄 Dashboard com gráficos | Em desenvolvimento |
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+<div align="center">
+
+| Camada | Tecnologia |
+|---|---|
+| **API** | FastAPI + Uvicorn |
+| **Banco de Dados** | Supabase (PostgreSQL) + Psycopg2 |
+| **Autenticação** | JWT (Python-JOSE) + Bcrypt + Supabase Auth |
+| **Visão Computacional** | OpenCV + Tesseract OCR + NumPy |
+| **Arquivos** | OpenPyXL (Excel) + ReportLab (PDF) |
+| **Configuração** | Python-dotenv + Python-multipart |
+
+</div>
+
+---
+
+## 📁 Estrutura do Projeto
+
+```bash
+📦 clivon-backend
+ ┣ 📂 backend
+ ┃ ┣ 📂 core
+ ┃ ┃ ┣ 📜 auth.py              # Autenticação JWT + Supabase Auth
+ ┃ ┃ ┣ 📜 database.py          # Conexão com o banco de dados
+ ┃ ┃ ┣ 📜 grading.py           # Lógica de correção de provas
+ ┃ ┃ ┣ 📜 omr_engine.py        # Motor de visão computacional
+ ┃ ┃ ┣ 📜 image_processing.py  # Processamento de imagens
+ ┃ ┃ └ 📜 answer_detection.py  # Detecção de respostas
+ ┃ ┣ 📂 routes
+ ┃ ┃ ┣ 📜 aluno.py             # Rotas do painel do aluno
+ ┃ ┃ ┣ 📜 professor.py         # Rotas do painel do professor
+ ┃ ┃ └ 📜 grade.py             # Rotas de correção
+ ┃ ┗ 📂 utils
+ ┃   └ 📜 file_handler.py      # Manipulação de arquivos
+ ┣ 📜 main.py                  # Entrada da aplicação
+ ┣ 📜 supabase_client.py       # Cliente Supabase
+ ┣ 📜 requirements.txt
+ ┣ 📜 .env.example
+ ┗ 📜 README.md
+```
+
+---
+
+## 🚀 Como Rodar o Projeto
+
+### Pré-requisitos
+
+- Python 3.11+
+- Tesseract OCR instalado
+- Conta no [Supabase](https://supabase.com)
+
+---
+
+### 1. Clonar o repositório
+
+```bash
+git clone https://github.com/Jcarlosk/clivon-backend.git
+cd clivon-backend
+```
+
+### 2. Criar ambiente virtual
+
+```bash
+python -m venv .venv
+```
+
+**Windows**
+```bash
+.venv\Scripts\activate
+```
+
+**Linux/Mac**
+```bash
+source .venv/bin/activate
+```
+
+### 3. Instalar dependências
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configurar variáveis de ambiente
+
+Crie um arquivo `.env` na raiz do projeto:
+
+```env
+# Chave secreta para JWT
+SECRET_KEY=sua_chave_secreta_aqui
+
+# Supabase
+SUPABASE_URL=https://SEU_PROJECT_ID.supabase.co
+SUPABASE_ANON_KEY=sua_chave_anon_aqui
+SUPABASE_SERVICE_KEY=sua_chave_service_role_aqui
+
+# Banco de dados (connection string direta)
+DATABASE_URL=postgresql://postgres:SENHA@db.SEU_PROJECT_ID.supabase.co:5432/postgres
+```
+
+> 🔑 As chaves do Supabase ficam em: **Dashboard → Settings → API**
+
+### 5. Instalar Tesseract OCR
+
+**Windows**
+- Baixe o instalador em: https://github.com/UB-Mannheim/tesseract/wiki
+- Adicione ao PATH do sistema
+
+**Linux**
+```bash
+sudo apt install tesseract-ocr
+```
+
+**Mac**
+```bash
+brew install tesseract
+```
+
+### 6. Rodar o servidor
+
+```bash
+uvicorn main:app --reload
+```
+
+Acesse a documentação interativa:
+```
+http://127.0.0.1:8000/docs
+```
+
+---
+
+## ⚙️ Como Funciona
+
+```
+📸 Professor envia imagem da prova
+        ↓
+🔍 OpenCV processa e normaliza a imagem
+        ↓
+📝 Tesseract OCR extrai as respostas
+        ↓
+✅ Sistema compara com o gabarito cadastrado
+        ↓
+💾 Resultado salvo no Supabase
+        ↓
+📊 Aluno e professor visualizam no painel
+```
+
+---
+
+## 🔐 Autenticação
+
+O sistema usa dois fluxos distintos:
+
+**Professor** → Supabase Auth (`auth.users`) + JWT próprio
+```
+POST /login
+{ "email": "...", "password": "..." }
+```
+
+**Aluno** → Login por código de turma + matrícula + PIN (data de nascimento)
+```
+POST /aluno/login
+{ "join_code": "MAT7B25", "enrollment": "2025001042", "pin": "15042010" }
+```
+
+---
+
+## 📦 Dependências
+
+```txt
+fastapi==0.111.0
+uvicorn==0.29.0
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+python-multipart==0.0.9
+python-jose==3.3.0
+passlib==1.7.4
+bcrypt==4.1.2
+openpyxl==3.1.2
+reportlab==4.1.0
+pytesseract==0.3.10
+supabase==2.4.3
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+httpx==0.27.0
+```
+
+---
+
+## 🗺️ Roadmap
+
+- [x] Autenticação professor via Supabase Auth
+- [x] Login do aluno por código de turma
+- [x] Correção automática de provas
+- [x] Painel do professor e do aluno
+- [ ] Reconhecimento de bolhas estilo ENEM
+- [ ] Dashboard com gráficos de desempenho
+- [ ] Sistema SaaS com planos
+- [ ] App mobile
+- [ ] Correção com IA avançada
+- [ ] Upload em lote de provas
+
+---
+
+## 🤝 Contribuição
+
+1. Faça um Fork do projeto
+2. Crie uma branch para sua feature
+```bash
+git checkout -b feature/nova-feature
+```
+3. Commit suas mudanças
+```bash
+git commit -m "feat: adiciona nova feature"
+```
+4. Push para a branch
+```bash
+git push origin feature/nova-feature
+```
+5. Abra um Pull Request
+
+---
+
+## 📄 Licença
+
+Este projeto está sob a licença **MIT**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+---
+
+<div align="center">
+
+**Desenvolvido com ❤️ por [Weko Studio](https://github.com/Jcarlosk)**
+
+[![GitHub](https://img.shields.io/badge/GitHub-Jcarlosk-181717?style=flat-square&logo=github)](https://github.com/Jcarlosk)
+
+</div>
