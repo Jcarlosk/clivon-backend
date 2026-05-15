@@ -12,6 +12,7 @@ from backend.routes.grade import router as grade_router
 from backend.core.auth import router as auth_router
 from backend.routes.aluno import router as aluno_router
 from backend.routes.professor import router as professor_router
+from backend.routes.admin import router as admin_router # NOVO
 
 app = FastAPI(
     title="Clivon Edu API",
@@ -20,13 +21,11 @@ app = FastAPI(
 )
 
 # ── CORS ──────────────────────────────────────────────────────
-# allow_credentials=True exige origens explícitas (não aceita "*")
-# Configure ALLOWED_ORIGINS no .env ou no painel do Render:
-# Ex: https://clivonedu.netlify.app
 ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("ALLOWED_ORIGINS", "https://clivonedu.netlify.app").split(",")
-    if origin.strip()
+    "https://clivon-frontend.vercel.app",  # <-- A SUA URL DA VERCEL AQUI
+    "https://clivonedu.netlify.app",       # (a antiga, se ainda quiser manter)
+    "http://localhost:5500",               # (para quando testar no PC)
+    "http://localhost:3000"
 ]
 
 app.add_middleware(
@@ -42,6 +41,7 @@ app.include_router(auth_router)
 app.include_router(grade_router)
 app.include_router(aluno_router)
 app.include_router(professor_router)
+app.include_router(admin_router) # Adicionado aqui!
 
 @app.get("/")
 def root():

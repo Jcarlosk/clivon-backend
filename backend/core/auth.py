@@ -3,7 +3,6 @@ auth.py — Clivon Edu Authentication
 ====================================
 PROFESSOR → Supabase Auth (auth.users) + JWT próprio
 ALUNO     → student_login_by_code() SQL + JWT próprio
-            Recebe pin no formato DDMMYYYY e converte para DATE (YYYY-MM-DD)
 """
 
 import os
@@ -39,9 +38,9 @@ class TeacherLoginPayload(BaseModel):
     password: str
 
 class StudentLoginPayload(BaseModel):
-    join_code:  str   # ex: "ANO2A25"
-    enrollment: str   # ex: "20260010007"
-    pin:        str   # data de nascimento DDMMYYYY, ex: "20082005"
+    join_code:  str   
+    enrollment: str   
+    pin:        str   
 
 class RegisterPayload(BaseModel):
     name:      str
@@ -66,11 +65,6 @@ def _decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token inválido.")
 
 def _pin_to_date(pin: str) -> str:
-    """
-    Converte PIN DDMMYYYY → YYYY-MM-DD para passar ao banco como DATE.
-    Ex: "20082005" → "2005-08-20"
-    Lança ValueError se o formato for inválido.
-    """
     pin = pin.strip()
     if len(pin) != 8 or not pin.isdigit():
         raise ValueError(f"PIN inválido: '{pin}'. Esperado DDMMYYYY com 8 dígitos.")
@@ -80,9 +74,7 @@ def _pin_to_date(pin: str) -> str:
 
 # ── Guards (Dependencies) ─────────────────────────────────────────────────────
 
-def get_current_teacher(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict:
+def get_current_teacher(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     payload = _decode_token(credentials.credentials)
     if payload.get("type") != "teacher":
         raise HTTPException(status_code=403, detail="Acesso restrito a professores.")
@@ -93,9 +85,7 @@ def get_current_teacher(
         "role":      payload.get("role", "teacher"),
     }
 
-def get_current_student(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict:
+def get_current_student(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     payload = _decode_token(credentials.credentials)
     if payload.get("type") != "student":
         raise HTTPException(status_code=403, detail="Acesso restrito a alunos.")
@@ -113,12 +103,17 @@ def require_coordinator(teacher: dict = Depends(get_current_teacher)) -> dict:
         raise HTTPException(status_code=403, detail="Apenas coordenadores podem aceder a este recurso.")
     return teacher
 
+# NOVO: Guard exclusivo para o Admin Mestre
+def require_admin(teacher: dict = Depends(get_current_teacher)) -> dict:
+    if teacher["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Apenas a Diretoria (Admin) pode aceder a este recurso.")
+    return teacher
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/login")
 def teacher_login(payload: TeacherLoginPayload):
-    """Login do professor via Supabase Auth."""
     if not SUPABASE_URL or not SUPABASE_ANON:
         raise HTTPException(status_code=500, detail="Configuração do Supabase ausente no servidor.")
 
@@ -186,12 +181,6 @@ def teacher_login(payload: TeacherLoginPayload):
 
 @router.post("/aluno/login")
 def student_login(payload: StudentLoginPayload):
-    """
-    Login do aluno via student_login_by_code().
-    Frontend envia pin no formato DDMMYYYY (ex: "20082005").
-    Convertido internamente para DATE YYYY-MM-DD antes de ir ao banco.
-    """
-    # Converte DDMMYYYY → YYYY-MM-DD
     try:
         data_nascimento = _pin_to_date(payload.pin)
     except ValueError as e:
@@ -202,11 +191,7 @@ def student_login(payload: StudentLoginPayload):
     try:
         cur.execute(
             "SELECT student_login_by_code(%s, %s, %s::date) AS result",
-            (
-                payload.join_code.strip().upper(),
-                payload.enrollment.strip(),
-                data_nascimento,
-            ),
+            (payload.join_code.strip().upper(), payload.enrollment.strip(), data_nascimento),
         )
         row = cur.fetchone()
     except Exception as e:
@@ -254,10 +239,7 @@ def student_login(payload: StudentLoginPayload):
 
 
 @router.post("/register")
-def register_teacher(
-    payload:  RegisterPayload,
-    _teacher: dict = Depends(require_coordinator),
-):
+def register_teacher(payload: RegisterPayload, _teacher: dict = Depends(require_coordinator)):
     """Cria professor via create_teacher(). Apenas coordenadores e admins."""
     if _teacher["school_id"] != payload.school_id and _teacher["role"] != "admin":
         raise HTTPException(status_code=403, detail="Só podes registar professores na tua escola.")
@@ -283,7 +265,7 @@ def register_teacher(
         raise HTTPException(status_code=400, detail=result.get("error", "Erro ao registar professor."))
 
     return {
-        "teacher_id": str(result["teacher_id"]),
+        "teacher_id": str(result.get("teacher_id", "")),
         "message":    "Professor registado com sucesso.",
     }
 
