@@ -25,7 +25,7 @@ class ImportStudentsPayload(BaseModel):
     students: List[Dict[str, Any]] # Lista de {"name": "...", "birth_date": "YYYY-MM-DD"}
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# ── Endpoints de Leitura (GET) ────────────────────────────────────────────────
 
 @router.get("/stats")
 def get_dashboard_stats(teacher: dict = Depends(require_admin)):
@@ -47,6 +47,77 @@ def get_dashboard_stats(teacher: dict = Depends(require_admin)):
         cur.close()
         conn.close()
 
+
+@router.get("/teachers")
+def list_teachers(teacher: dict = Depends(require_admin)):
+    """Lista todos os professores da escola logada usando a view."""
+    conn = get_conn()
+    cur = get_cursor(conn)
+    try:
+        cur.execute("""
+            SELECT id, name, email, role, is_active, created_date 
+            FROM vw_admin_teachers_list 
+            WHERE school_id = %s
+        """, (teacher["school_id"],))
+        return cur.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/classes")
+def list_classes(teacher: dict = Depends(require_admin)):
+    """Lista todas as turmas da escola logada, incluindo o total de alunos."""
+    conn = get_conn()
+    cur = get_cursor(conn)
+    try:
+        cur.execute("""
+            SELECT 
+                c.id, c.name, c.year, c.shift, c.join_code, c.is_active,
+                (SELECT COUNT(*) FROM class_students cs WHERE cs.class_id = c.id) as students
+            FROM classes c
+            WHERE c.school_id = %s
+            ORDER BY c.name
+        """, (teacher["school_id"],))
+        return cur.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/students")
+def list_students(teacher: dict = Depends(require_admin)):
+    """Lista todos os alunos da escola (juntando dados da turma usando a view)."""
+    conn = get_conn()
+    cur = get_cursor(conn)
+    try:
+        # Renomeamos as colunas na query para o formato exato que o JS espera
+        cur.execute("""
+            SELECT 
+                student_id as id, 
+                student_name as name, 
+                enrollment, 
+                class_name, 
+                class_id,
+                birth_date, 
+                is_active
+            FROM vw_class_students 
+            WHERE school_id = %s
+            ORDER BY student_name
+        """, (teacher["school_id"],))
+        return cur.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ── Endpoints de Escrita (POST) ───────────────────────────────────────────────
 
 @router.post("/students")
 def create_student_route(payload: StudentCreatePayload, teacher: dict = Depends(require_admin)):
