@@ -22,7 +22,8 @@ app = FastAPI(
 
 # ── CORS ──────────────────────────────────────────────────────
 ALLOWED_ORIGINS = [
-    "https://clivon-frontend.vercel.app",  # <-- A SUA URL DA VERCEL AQUI
+    "https://clivon-edu.vercel.app",
+    "https://clivon-frontend.vercel.app",
     "https://clivonedu.netlify.app",       # (a antiga, se ainda quiser manter)
     "http://localhost:5500",               # (para quando testar no PC)
     "http://localhost:3000"
